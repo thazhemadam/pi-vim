@@ -53,6 +53,11 @@ import {
   type ClipboardMirrorPolicy,
   type RegisterWriteSource,
 } from "./clipboard-policy.js";
+import {
+  resolveWordTextObjectRange,
+  type TextObjectKind,
+  type TextObjectRange,
+} from "./text-objects.js";
 
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
@@ -524,7 +529,7 @@ class ClipboardMirror {
 export class ModalEditor extends CustomEditor {
   private mode: Mode = "insert";
   private pendingMotion: PendingMotion = null;
-  private pendingTextObject: "i" | "a" | null = null;
+  private pendingTextObject: TextObjectKind | null = null;
   private pendingOperator: PendingOperator = null;
   private prefixCount: string = "";
   private operatorCount: string = "";
@@ -2767,77 +2772,21 @@ export class ModalEditor extends CustomEditor {
   }
 
   private getWordObjectRange(
-    kind: "i" | "a",
+    kind: TextObjectKind,
     count: number = 1,
-  ): { startAbs: number; endAbs: number } | null {
+  ): TextObjectRange | null {
     const lines = this.getLines();
     const cursor = this.getCursor();
     const line = lines[cursor.line] ?? "";
-    if (!line) return null;
+    const lineStartAbs = this.getAbsoluteIndex(cursor.line, 0);
 
-    const steps = Math.max(1, Math.min(MAX_COUNT, count));
-    const hasWordChar = (idx: number) => {
-      const ch = idx >= 0 && idx < line.length ? line[idx] : undefined;
-      return ch !== undefined && this.isWordChar(ch);
-    };
-
-    let col = Math.min(cursor.col, Math.max(0, line.length - 1));
-
-    if (!hasWordChar(col)) {
-      let right = col;
-      while (right < line.length && !hasWordChar(right)) right++;
-      if (right < line.length) {
-        col = right;
-      } else {
-        let left = Math.min(col, line.length - 1);
-        while (left >= 0 && !hasWordChar(left)) left--;
-        if (left < 0) return null;
-        col = left;
-      }
-    }
-
-    let start = col;
-    while (start > 0 && hasWordChar(start - 1)) start--;
-
-    let end = col + 1;
-    while (end < line.length && hasWordChar(end)) end++;
-
-    let remaining = steps - 1;
-    while (remaining > 0) {
-      let nextWordStart = end;
-      while (nextWordStart < line.length && !hasWordChar(nextWordStart)) nextWordStart++;
-      if (nextWordStart >= line.length) break;
-
-      let nextWordEnd = nextWordStart + 1;
-      while (nextWordEnd < line.length && hasWordChar(nextWordEnd)) nextWordEnd++;
-
-      end = nextWordEnd;
-      remaining--;
-    }
-
-    if (kind === "a") {
-      let aroundEnd = end;
-      while (aroundEnd < line.length) {
-        const ch = line[aroundEnd];
-        if (ch === undefined || !/\s/.test(ch)) break;
-        aroundEnd++;
-      }
-
-      if (aroundEnd > end) {
-        end = aroundEnd;
-      } else {
-        while (start > 0) {
-          const ch = line[start - 1];
-          if (ch === undefined || !/\s/.test(ch)) break;
-          start--;
-        }
-      }
-    }
-
-    return {
-      startAbs: this.getAbsoluteIndex(cursor.line, start),
-      endAbs: this.getAbsoluteIndex(cursor.line, end),
-    };
+    return resolveWordTextObjectRange(
+      line,
+      lineStartAbs,
+      cursor.col,
+      kind,
+      count,
+    );
   }
 
   private static readonly PUT_SIZE_LIMIT = 512 * 1024; // 512 KB safety cap

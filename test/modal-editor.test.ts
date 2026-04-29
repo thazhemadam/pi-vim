@@ -2223,8 +2223,32 @@ describe("word text objects — iw / aw", () => {
     chk("foo bar", ["d", "i", "w"], " bar", "foo");
   });
 
+  it("d2iw deletes two inner words", () => {
+    chk("foo bar baz", ["d", "2", "i", "w"], " baz", "foo bar");
+  });
+
   it("daw deletes word + trailing spaces", () => {
     chk("foo bar", ["d", "a", "w"], "bar", "foo ");
+  });
+
+  it("daw from the final word includes leading whitespace", () => {
+    const { editor } = createEditorWithSpy("foo bar");
+
+    setInternalCursor(editor, 4);
+    sendKeys(editor, ["d", "a", "w"]);
+
+    assert.equal(editor.getText(), "foo");
+    assert.equal(editor.getRegister(), " bar");
+  });
+
+  it("diw from whitespace chooses the next word", () => {
+    const { editor } = createEditorWithSpy("foo   bar");
+
+    setInternalCursor(editor, 3);
+    sendKeys(editor, ["d", "i", "w"]);
+
+    assert.equal(editor.getText(), "foo   ");
+    assert.equal(editor.getRegister(), "bar");
   });
 
   it("yiw yanks inner word without mutation", () => {
