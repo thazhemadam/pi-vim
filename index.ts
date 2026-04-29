@@ -46,6 +46,11 @@ import {
   type WordMotionDirection,
   type WordMotionTarget,
 } from "./word-boundary-cache.js";
+import {
+  DEFAULT_CLIPBOARD_MIRROR_POLICY,
+  type ClipboardMirrorPolicy,
+  type RegisterWriteSource,
+} from "./clipboard-policy.js";
 
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
@@ -540,6 +545,7 @@ export class ModalEditor extends CustomEditor {
 
   // Unnamed register
   private unnamedRegister: string = "";
+  private clipboardMirrorPolicy: ClipboardMirrorPolicy = DEFAULT_CLIPBOARD_MIRROR_POLICY;
   private readonly clipboardMirror = new ClipboardMirror(writeClipboardInChildProcess);
   private clipboardReadFn: ClipboardReadFn = readClipboardInChildProcess;
   private quitFn: () => void = () => {};
@@ -567,6 +573,12 @@ export class ModalEditor extends CustomEditor {
   }
   setClipboardReadFn(fn: ClipboardReadFn): void {
     this.clipboardReadFn = fn;
+  }
+  setClipboardMirrorPolicy(policy: ClipboardMirrorPolicy): void {
+    this.clipboardMirrorPolicy = policy;
+  }
+  getClipboardMirrorPolicy(): ClipboardMirrorPolicy {
+    return this.clipboardMirrorPolicy;
   }
   setQuitFn(fn: () => void): void { this.quitFn = fn; }
   setNotifyFn(fn: (message: string) => void): void { this.notifyFn = fn; }
@@ -2284,9 +2296,16 @@ export class ModalEditor extends CustomEditor {
     }
   }
 
-  private writeToRegister(text: string): void {
+  private shouldMirrorRegisterWrite(source: RegisterWriteSource): boolean {
+    if (this.clipboardMirrorPolicy === "never") return false;
+    if (this.clipboardMirrorPolicy === "yank") return source === "yank";
+    return true;
+  }
+
+  private writeToRegister(text: string, source: RegisterWriteSource = "mutation"): void {
     this.unnamedRegister = text;
     if (!text) return;
+    if (!this.shouldMirrorRegisterWrite(source)) return;
 
     this.clipboardMirror.mirror(text);
   }
@@ -2444,7 +2463,7 @@ export class ModalEditor extends CustomEditor {
 
   private yankLineRange(startLine: number, endLine: number): void {
     if (this.getLines().length === 0) return;
-    this.writeToRegister(this.getLinewisePayload(startLine, endLine));
+    this.writeToRegister(this.getLinewisePayload(startLine, endLine), "yank");
   }
 
   private deleteLinewiseByDelta(delta: number): void {
@@ -2679,7 +2698,7 @@ export class ModalEditor extends CustomEditor {
     if (end <= start) return;
 
     // Yank only — no cursor movement, no text mutation
-    this.writeToRegister(line.slice(start, end));
+    this.writeToRegister(line.slice(start, end), "yank");
   }
 
   private yankRangeByAbsolute(currentAbs: number, targetAbs: number, inclusive: boolean = false): void {
@@ -2688,7 +2707,7 @@ export class ModalEditor extends CustomEditor {
     const rawEnd = Math.max(currentAbs, targetAbs) + (inclusive ? 1 : 0);
     const end = Math.min(rawEnd, text.length);
     if (end <= start) return;
-    this.writeToRegister(text.slice(start, end));
+    this.writeToRegister(text.slice(start, end), "yank");
   }
 
   private getCursorFromAbsoluteIndex(text: string, abs: number): { line: number; col: number } {
