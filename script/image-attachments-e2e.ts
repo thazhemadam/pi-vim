@@ -135,6 +135,15 @@ const WRAPPER_FACING_FIELDS = [
 const currentRequire = createRequire(import.meta.url);
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+function createNpmCommandEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.NPM_CONFIG_BEFORE;
+  delete env.npm_config_before;
+  delete env.NPM_CONFIG_MIN_RELEASE_AGE;
+  delete env.npm_config_min_release_age;
+  return env;
+}
+
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -172,9 +181,24 @@ function hasPackageName(packageDir: string, expectedName: string): boolean {
   return existsSync(packageJsonPath) && readPackageName(packageJsonPath) === expectedName;
 }
 
+function findPackageRootInAncestorNodeModules(specifier: string): string | null {
+  let dir = projectRoot;
+
+  while (true) {
+    const nodeModulesCandidate = join(dir, "node_modules", ...specifier.split("/"));
+    if (hasPackageName(nodeModulesCandidate, specifier)) return nodeModulesCandidate;
+
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  return null;
+}
+
 function findPackageRoot(specifier: string): string {
-  const nodeModulesCandidate = join(projectRoot, "node_modules", ...specifier.split("/"));
-  if (hasPackageName(nodeModulesCandidate, specifier)) return nodeModulesCandidate;
+  const ancestorNodeModulesPackage = findPackageRootInAncestorNodeModules(specifier);
+  if (ancestorNodeModulesPackage) return ancestorNodeModulesPackage;
 
   let dir: string;
   try {
@@ -209,7 +233,7 @@ function packLocalImageAttachments(packageDir: string, workspace: string): strin
       cwd: workspace,
       encoding: "utf8",
       env: {
-        ...process.env,
+        ...createNpmCommandEnv(),
         npm_config_ignore_scripts: "true",
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -234,10 +258,17 @@ function resolveImageAttachmentsDependency(workspace: string): string {
     return packLocalImageAttachments(packageDir, workspace);
   }
 
-  const candidates = [
-    resolve(projectRoot, "../pi-image-attachments"),
-    resolve(projectRoot, "../../pi-image-attachments"),
-  ];
+  const candidates = new Set<string>();
+  let dir = projectRoot;
+
+  while (true) {
+    candidates.add(resolve(dir, "../pi-image-attachments"));
+    candidates.add(resolve(dir, "pi-image-attachments"));
+
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
 
   for (const candidate of candidates) {
     if (hasPackageName(candidate, IMAGE_PACKAGE_NAME)) {
@@ -254,7 +285,7 @@ function runNpmInstall(workspace: string): void {
       cwd: workspace,
       encoding: "utf8",
       env: {
-        ...process.env,
+        ...createNpmCommandEnv(),
         npm_config_audit: "false",
         npm_config_fund: "false",
       },

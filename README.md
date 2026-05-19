@@ -34,21 +34,22 @@ The setting controls write mirroring only. `p` / `P` keep the paste policy docum
 
 ## wrapping pi-vim
 
-Supported order: `pi-vim` first, `@jordyvd/pi-image-attachments` wrapper second.
+Supported: `pi-vim` first, `@jordyvd/pi-image-attachments` second. pi-vim does not call `ctx.ui.getEditorComponent()`; the wrapper does. Inverse order unsupported.
 
-pi-vim does not call `ctx.ui.getEditorComponent()`; the later wrapper does. The inverse order is not supported.
+Wrappers must decorate in place or forward unintercepted surface: lifecycle (`handleInput`, `render`, `invalidate`), text (`getText`, `setText`, `insertTextAtCursor`, `getExpandedText`), callbacks (`onSubmit`, `onChange`, `onEscape`, `onCtrlD`, `onPasteImage`, `onExtensionShortcut`), `actionHandlers`, flags (`focused`, `disableSubmit`), reads (`getLines`, `getCursor`, `getMode()`).
 
-Wrappers must decorate pi-vim in place or forward each unintercepted property, method, and callback. Preserve lifecycle (`handleInput`, `render`, `invalidate`), text methods (`getText`, `setText`, `insertTextAtCursor`, `getExpandedText`), app callbacks (`onSubmit`, `onChange`, `onEscape`, `onCtrlD`, `onPasteImage`, `onExtensionShortcut`), `actionHandlers`, flags (`focused`, `disableSubmit`), and state reads (`getLines`, `getCursor`, `getMode()`).
+#18/#21 delegation is not adopted: no previous-extension wrapping, insert delegate, or generic composition layer.
 
-#18/#21 previous-editor delegation is intentionally not adopted: no previous-extension wrapping, insert delegate, or generic composition layer.
-
-Manual smoke (sibling image-attachments checkout):
+Manual smoke. If raw `-e` cannot resolve Pi peer packages, run `npm install --ignore-scripts --package-lock=false` in the image checkout.
 
 ```bash
+# repo root
 pi -e ./index.ts -e ../pi-image-attachments/index.ts
+# this worktree
+pi -e ./index.ts -e ../../../pi-image-attachments/index.ts
 ```
 
-Check: insert text; add/paste an image path; see `[Image #1]` plus widget; submit text+image with placeholder stripped; switch INSERT/NORMAL modes.
+Check: insert text; add/paste image path; see `[Image #1]` widget; submit text+image stripped; switch INSERT/NORMAL modes.
 
 ## contributor setup
 
