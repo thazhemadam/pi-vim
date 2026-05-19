@@ -92,7 +92,7 @@ type ImageContent = {
 };
 
 const IMAGE_PACKAGE_NAME = "@jordyvd/pi-image-attachments";
-const IMAGE_PACKAGE_REGISTRY_RANGE = "^0.1.1";
+const IMAGE_PACKAGE_REGISTRY_RANGE = "0.1.1";
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
 const SUBMIT_INPUT = "\r";
