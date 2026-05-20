@@ -104,7 +104,10 @@ type ClipboardProcess = ReturnType<typeof spawn>;
 
 type ModeColorKey = keyof Required<ModeColorSettings>;
 type ModeColorizers = Record<ModeColorKey, (s: string) => string>;
-type ModalEditorOptions = { labelColorizers?: ModeColorizers | null };
+type ModalEditorOptions = {
+  labelColorizers?: ModeColorizers | null;
+  borderColorizers?: ModeColorizers | null;
+};
 type ThemeLike = { fg(token: string, text: string): string };
 
 type CursorShapeSequence =
@@ -633,6 +636,7 @@ export class ModalEditor extends CustomEditor {
   private currentTransition: TransitionState = "none";
   private onChangeHooked: boolean = false;
   private readonly labelColorizers: ModeColorizers | null;
+  private readonly borderColorizers: ModeColorizers | null;
   private readonly cursorShapeRuntime: CursorShapeRuntime | null;
   private lastCursorShapeSequence: CursorShapeSequence | null = null;
 
@@ -656,6 +660,8 @@ export class ModalEditor extends CustomEditor {
     super(tui, theme, kb);
     this.cursorShapeRuntime = getCursorShapeRuntime(tui);
     this.labelColorizers = opts?.labelColorizers ?? null;
+    this.borderColorizers = opts?.borderColorizers ?? null;
+    this.syncBorderColorForMode();
   }
 
   setClipboardFn(fn: (text: string, signal?: AbortSignal) => unknown): void {
@@ -695,6 +701,21 @@ export class ModalEditor extends CustomEditor {
   }
   getText(): string {
     return this.getLines().join("\n");
+  }
+
+  private getActiveMode(): Mode | "ex" {
+    if (this.pendingExCommand !== null) return "ex";
+    return this.mode;
+  }
+
+  private syncBorderColorForMode(): void {
+    if (!this.borderColorizers) return;
+    this.borderColor = this.borderColorizers[this.getActiveMode()];
+  }
+
+  private setMode(mode: Mode): void {
+    this.mode = mode;
+    this.syncBorderColorForMode();
   }
 
   override setText(text: string): void {
@@ -887,9 +908,11 @@ export class ModalEditor extends CustomEditor {
     this.pendingExCommand = ":";
     this.acceptingBracketedPasteInExCommand = false;
     this.pendingEscWhileAcceptingBracketedPasteInExCommand = false;
+    this.syncBorderColorForMode();
   }
 
   private clearPendingExCommand(): void {
+    const hadPending = this.pendingExCommand !== null;
     const shouldDiscardBracketedPasteTail =
       this.acceptingBracketedPasteInExCommand ||
       this.pendingEscWhileAcceptingBracketedPasteInExCommand;
@@ -901,6 +924,10 @@ export class ModalEditor extends CustomEditor {
     if (shouldDiscardBracketedPasteTail) {
       this.discardingBracketedPasteInNormalMode = true;
       this.pendingEscWhileDiscardingBracketedPasteInNormalMode = false;
+    }
+
+    if (hadPending) {
+      this.syncBorderColorForMode();
     }
   }
 
@@ -1190,7 +1217,7 @@ export class ModalEditor extends CustomEditor {
     }
     if (this.mode === "insert") {
       this.clearUnderlyingPasteStateIfActive();
-      this.mode = "normal";
+      this.setMode("normal");
     } else {
       super.handleInput("\x1b"); // pass escape to abort agent
     }
@@ -1951,7 +1978,7 @@ export class ModalEditor extends CustomEditor {
     const seq = NORMAL_KEYS[key];
     switch (key) {
       case "i":
-        this.mode = "insert";
+        this.setMode("insert");
         break;
       case "a":
         this.mode = "insert";
@@ -3265,11 +3292,7 @@ export class ModalEditor extends CustomEditor {
   }
 
   private getModeLabelColorizer(): ((s: string) => string) | null {
-    if (!this.labelColorizers) return null;
-    if (this.pendingExCommand !== null) return this.labelColorizers.ex;
-    return this.mode === "insert"
-      ? this.labelColorizers.insert
-      : this.labelColorizers.normal;
+    return this.labelColorizers?.[this.getActiveMode()] ?? null;
   }
 
   private getModeLabel(): string {
@@ -3316,13 +3339,18 @@ export default function (pi: ExtensionAPI) {
     const t = ctx.ui.theme;
     const modeColors = resolveModeColors(piVimSettings.modeColors);
     const reverseVideo = (s: string) => `\x1b[7m${s}\x1b[27m`;
-    const colorizers = t
+    const labelColorizers = t
       ? buildModeColorizers(t, modeColors, reverseVideo)
       : null;
+    const borderColorizers =
+      t && piVimSettings.syncBorderColorWithMode === true
+        ? buildModeColorizers(t, modeColors)
+        : null;
     ctx.ui.setEditorComponent((tui, theme, kb) => {
       cursorShapeCleanup = enableCursorShapeSupport(tui);
       const editor = new ModalEditor(tui, theme, kb, {
-        labelColorizers: colorizers,
+        labelColorizers,
+        borderColorizers,
       });
       editor.setClipboardMirrorPolicy(clipboardMirrorPolicy.policy);
       editor.setQuitFn(() => ctx.shutdown());

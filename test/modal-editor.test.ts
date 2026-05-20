@@ -1346,6 +1346,81 @@ describe("mode color settings", () => {
       restore();
     }
   });
+
+  for (const [name, settings] of [
+    ["absent", {}],
+    ["false", { syncBorderColorWithMode: false }],
+  ] as const) {
+    it(`syncBorderColorWithMode ${name} keeps the original border color reference`, async () => {
+      const theme = createRecordingTheme();
+      const restore = setPiVimSettingsReaderForTests(() => settings);
+
+      try {
+        const extension = await installExtensionWithEditorFactory(theme);
+        const editor = extension.editorFactory(
+          stubTui,
+          stubTheme,
+          stubKeybindings,
+        );
+        const originalBorderColor = editor.borderColor;
+
+        sendKeys(editor, ["\x1b", ":", "\x1b", "i"]);
+
+        assert.equal(editor.borderColor, originalBorderColor);
+      } finally {
+        restore();
+      }
+    });
+  }
+
+  it("syncBorderColorWithMode true syncs border color across core transitions", async () => {
+    const theme = createRecordingTheme();
+    const restore = setPiVimSettingsReaderForTests(() => ({
+      modeColors: {
+        insert: "insertToken",
+        normal: "normalToken",
+        ex: "exToken",
+      },
+      syncBorderColorWithMode: true,
+    }));
+
+    try {
+      const extension = await installExtensionWithEditorFactory(theme);
+      const editor = extension.editorFactory(
+        stubTui,
+        stubTheme,
+        stubKeybindings,
+      );
+
+      assert.equal(
+        editor.borderColor("border"),
+        "<insertToken>border</insertToken>",
+      );
+
+      sendKeys(editor, ["\x1b"]);
+      assert.equal(
+        editor.borderColor("border"),
+        "<normalToken>border</normalToken>",
+      );
+
+      sendKeys(editor, [":"]);
+      assert.equal(editor.borderColor("border"), "<exToken>border</exToken>");
+
+      sendKeys(editor, ["\x1b"]);
+      assert.equal(
+        editor.borderColor("border"),
+        "<normalToken>border</normalToken>",
+      );
+
+      sendKeys(editor, ["i"]);
+      assert.equal(
+        editor.borderColor("border"),
+        "<insertToken>border</insertToken>",
+      );
+    } finally {
+      restore();
+    }
+  });
 });
 
 describe("cursor shape lifecycle", () => {
