@@ -132,7 +132,6 @@ function resolveModeColors(
     ex: colors?.ex ?? MODE_COLOR_DEFAULTS.ex,
   };
 }
-
 function colorizeWithTheme(
   theme: ThemeLike,
   token: string,
@@ -149,7 +148,6 @@ function colorizeWithTheme(
   }
   return theme.fg(fallbackToken, text);
 }
-
 function buildModeColorizers(
   theme: ThemeLike,
   colors: Required<ModeColorSettings>,
@@ -661,7 +659,7 @@ export class ModalEditor extends CustomEditor {
     this.cursorShapeRuntime = getCursorShapeRuntime(tui);
     this.labelColorizers = opts?.labelColorizers ?? null;
     this.borderColorizers = opts?.borderColorizers ?? null;
-    this.syncBorderColorForMode();
+    this.installModeBorderColorizer();
   }
 
   setClipboardFn(fn: (text: string, signal?: AbortSignal) => unknown): void {
@@ -708,14 +706,17 @@ export class ModalEditor extends CustomEditor {
     return this.mode;
   }
 
-  private syncBorderColorForMode(): void {
+  private installModeBorderColorizer(): void {
     if (!this.borderColorizers) return;
-    this.borderColor = this.borderColorizers[this.getActiveMode()];
+    const baseBorderColor = this.borderColor;
+    this.borderColor = (text: string) => {
+      const colorize = this.borderColorizers?.[this.getActiveMode()];
+      return colorize ? colorize(text) : baseBorderColor(text);
+    };
   }
 
-  private setMode(mode: Mode): void {
+  private setMode(mode: Mode = "insert"): void {
     this.mode = mode;
-    this.syncBorderColorForMode();
   }
 
   override setText(text: string): void {
@@ -908,11 +909,9 @@ export class ModalEditor extends CustomEditor {
     this.pendingExCommand = ":";
     this.acceptingBracketedPasteInExCommand = false;
     this.pendingEscWhileAcceptingBracketedPasteInExCommand = false;
-    this.syncBorderColorForMode();
   }
 
   private clearPendingExCommand(): void {
-    const hadPending = this.pendingExCommand !== null;
     const shouldDiscardBracketedPasteTail =
       this.acceptingBracketedPasteInExCommand ||
       this.pendingEscWhileAcceptingBracketedPasteInExCommand;
@@ -924,10 +923,6 @@ export class ModalEditor extends CustomEditor {
     if (shouldDiscardBracketedPasteTail) {
       this.discardingBracketedPasteInNormalMode = true;
       this.pendingEscWhileDiscardingBracketedPasteInNormalMode = false;
-    }
-
-    if (hadPending) {
-      this.syncBorderColorForMode();
     }
   }
 
@@ -1093,7 +1088,7 @@ export class ModalEditor extends CustomEditor {
       return;
     }
 
-    if (this.mode === "insert") {
+    if ("insert" === this.mode) {
       if (matchesKey(data, Key.shiftAlt("a")) || data === "\x1bA") {
         super.handleInput(CTRL_E);
         return;
@@ -1215,7 +1210,7 @@ export class ModalEditor extends CustomEditor {
       this.clearPendingState();
       return;
     }
-    if (this.mode === "insert") {
+    if ("insert" === this.mode) {
       this.clearUnderlyingPasteStateIfActive();
       this.setMode("normal");
     } else {
@@ -1437,7 +1432,7 @@ export class ModalEditor extends CustomEditor {
     } else if (this.pendingOperator === "c") {
       this.deleteWithCharMotion(pendingMotion, data);
       this.pendingOperator = null;
-      this.mode = "insert";
+      this.setMode();
     } else if (this.pendingOperator === "y") {
       this.yankWithCharMotion(pendingMotion, data);
       this.pendingOperator = null;
@@ -1508,7 +1503,7 @@ export class ModalEditor extends CustomEditor {
     if (range.endAbs === range.startAbs) {
       if (pendingOperator === "c") {
         this.moveCursorToAbsoluteIndex(range.startAbs);
-        this.mode = "insert";
+        this.setMode();
       }
       return;
     }
@@ -1520,7 +1515,7 @@ export class ModalEditor extends CustomEditor {
 
     if (pendingOperator === "c") {
       this.deleteRangeByAbsolute(range.startAbs, range.endAbs);
-      this.mode = "insert";
+      this.setMode();
       return;
     }
 
@@ -1633,7 +1628,7 @@ export class ModalEditor extends CustomEditor {
 
       this.cutLine();
       this.pendingOperator = null;
-      this.mode = "insert";
+      this.setMode();
       return;
     }
 
@@ -1654,7 +1649,7 @@ export class ModalEditor extends CustomEditor {
         this.replaceTextInBuffer(newText, cursorAbs);
       }
       this.pendingOperator = null;
-      this.mode = "insert";
+      this.setMode();
       return;
     }
 
@@ -1689,7 +1684,7 @@ export class ModalEditor extends CustomEditor {
       data === "W" && this.isCursorOnNonWhitespace() ? "E" : data;
     if (this.deleteWithMotion(effectiveMotion, motionCount)) {
       this.pendingOperator = null;
-      this.mode = "insert";
+      this.setMode();
       return;
     }
 
@@ -1978,29 +1973,29 @@ export class ModalEditor extends CustomEditor {
     const seq = NORMAL_KEYS[key];
     switch (key) {
       case "i":
-        this.setMode("insert");
+        this.setMode();
         break;
       case "a":
-        this.mode = "insert";
+        this.setMode();
         if (!this.isCursorAtOrPastEol()) {
           super.handleInput(ESC_RIGHT);
         }
         break;
       case "A":
-        this.mode = "insert";
+        this.setMode();
         super.handleInput(CTRL_E);
         break;
       case "I":
-        this.mode = "insert";
+        this.setMode();
         this.moveCursorToFirstNonWhitespace();
         break;
       case "o":
         this.openLineBelow();
-        this.mode = "insert";
+        this.setMode();
         break;
       case "O":
         this.openLineAbove();
-        this.mode = "insert";
+        this.setMode();
         break;
       case "D":
         this.takeTotalCount(1);
@@ -2009,16 +2004,16 @@ export class ModalEditor extends CustomEditor {
       case "C":
         this.takeTotalCount(1);
         this.cutToEndOfLine();
-        this.mode = "insert";
+        this.setMode();
         break;
       case "S":
         this.takeTotalCount(1);
         this.cutCurrentLineContent();
-        this.mode = "insert";
+        this.setMode();
         break;
       case "s":
         this.cutCharUnderCursor();
-        this.mode = "insert";
+        this.setMode();
         break;
       case "x":
         this.cutCharUnderCursor();
@@ -3235,7 +3230,7 @@ export class ModalEditor extends CustomEditor {
   }
 
   private getDesiredCursorShapeSequence(): CursorShapeSequence {
-    return this.mode === "insert" && this.pendingExCommand === null
+    return "insert" === this.mode && this.pendingExCommand === null
       ? INSERT_CURSOR_SHAPE
       : BLOCK_CURSOR_SHAPE;
   }
@@ -3296,7 +3291,7 @@ export class ModalEditor extends CustomEditor {
   }
 
   private getModeLabel(): string {
-    if (this.mode === "insert") return " INSERT ";
+    if ("insert" === this.mode) return " INSERT ";
     if (this.pendingExCommand !== null) return ` EX ${this.pendingExCommand}_ `;
 
     const prefixCount = this.prefixCount;

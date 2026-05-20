@@ -713,6 +713,37 @@ function createEditorAtBufferEnd(text: string): ModalEditor {
   return editor;
 }
 
+function assertInsertBorderAfterModeChangingCommand(
+  fixtureText: string,
+  commandKeys: string[],
+): void {
+  const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings, {
+    borderColorizers: {
+      insert: (s: string) => `<insert>${s}</insert>`,
+      normal: (s: string) => `<normal>${s}</normal>`,
+      ex: (s: string) => `<ex>${s}</ex>`,
+    },
+  });
+
+  for (const char of fixtureText) {
+    editor.handleInput(char);
+  }
+  editor.handleInput("\x1b");
+
+  sendKeys(editor, commandKeys);
+
+  assert.equal(
+    editor.getMode(),
+    "insert",
+    `mode after [${commandKeys.join("")}]`,
+  );
+  assert.equal(
+    editor.borderColor("x"),
+    "<insert>x</insert>",
+    `border after [${commandKeys.join("")}]`,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Wrapper-facing editor surface
 // ---------------------------------------------------------------------------
@@ -1391,6 +1422,7 @@ describe("mode color settings", () => {
         stubTheme,
         stubKeybindings,
       );
+      const originalBorderColor = editor.borderColor;
 
       assert.equal(
         editor.borderColor("border"),
@@ -1417,10 +1449,32 @@ describe("mode color settings", () => {
         editor.borderColor("border"),
         "<insertToken>border</insertToken>",
       );
+      assert.equal(editor.borderColor, originalBorderColor);
     } finally {
       restore();
     }
   });
+
+  for (const [name, commandKeys] of [
+    ["i", ["i"]],
+    ["a", ["a"]],
+    ["A", ["A"]],
+    ["I", ["I"]],
+    ["o", ["o"]],
+    ["O", ["O"]],
+    ["C", ["C"]],
+    ["S", ["S"]],
+    ["s", ["s"]],
+    ["cc", ["c", "c"]],
+    ["cw", ["c", "w"]],
+    ["ct space", ["c", "t", " "]],
+  ] as const) {
+    it(`border updates for mode-changing commands: ${name}`, () => {
+      assertInsertBorderAfterModeChangingCommand("alpha beta", [
+        ...commandKeys,
+      ]);
+    });
+  }
 });
 
 describe("cursor shape lifecycle", () => {
