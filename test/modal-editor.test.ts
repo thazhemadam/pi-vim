@@ -801,6 +801,36 @@ describe("mode transitions", () => {
     assert.equal(editor.getMode(), "normal");
   });
 
+  it("escape from insert mode places normal cursor on previous character", () => {
+    const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings);
+
+    sendKeys(editor, ["h", "e", "l", "l", "o"]);
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 5 });
+
+    sendKeys(editor, ["\x1b"]);
+
+    assert.equal(editor.getMode(), "normal");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 4 });
+  });
+
+  it("escape from insert mode does not move before line start", () => {
+    const { editor } = createEditorWithSpy("hello");
+
+    sendKeys(editor, ["i", "\x1b"]);
+
+    assert.equal(editor.getMode(), "normal");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  });
+
+  it("escape from insert mode moves by one grapheme", () => {
+    const editor = new ModalEditor(stubTui, stubTheme, stubKeybindings);
+
+    sendKeys(editor, ["a", "😀", "\x1b"]);
+
+    assert.equal(editor.getMode(), "normal");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 1 });
+  });
+
   it("kitty ctrl+[ enters normal mode like escape", () => {
     const { editor } = createEditorWithSpy("hello");
     sendKeys(editor, ["i"]);
@@ -3802,6 +3832,25 @@ describe("single-key edits — x / s / S / D / C", () => {
     assert.deepEqual(clipboardWrites, ["h"]);
   });
 
+  it("x keeps the cursor on the next character after deleting in the middle", () => {
+    const { editor } = createEditorWithSpy("abcd");
+
+    sendKeys(editor, ["l", "l", "x"]);
+
+    assert.equal(editor.getText(), "abd");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 2 });
+  });
+
+  it("x moves back by one grapheme after deleting the last character", () => {
+    const { editor } = createEditorWithSpy("a😀b");
+
+    setInternalCursor(editor, 3);
+    sendKeys(editor, ["x"]);
+
+    assert.equal(editor.getText(), "a😀");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 1 });
+  });
+
   it("s: deletes char under cursor, enters insert mode", () => {
     const { editor } = createEditorWithSpy("hello");
     sendKeys(editor, ["s"]);
@@ -3856,6 +3905,7 @@ describe("Universal Counts: Edits and Put", () => {
 
     assert.equal(editor.getText(), "abcd");
     assert.equal(editor.getRegister(), "ef");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 3 });
   });
 
   it("3p pastes register text three times after cursor", () => {
@@ -4186,6 +4236,7 @@ describe("EOL and newline semantics", () => {
     sendKeys(editor, ["e", "x"]);
     assert.equal(editor.getRegister(), "1");
     assert.equal(editor.getText(), "line\nline2"); // only '1' gone, newline intact
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 3 });
   });
 });
 
@@ -5321,7 +5372,7 @@ describe("undo / redo — u / ctrl+r", () => {
       initial: "hello world",
       keys: ["c", "w", "Z", "\x1b"],
       expectedText: "Zworld",
-      expectedCursor: { line: 0, col: 1 },
+      expectedCursor: { line: 0, col: 0 },
       expectedRegister: "hello ",
     });
   });

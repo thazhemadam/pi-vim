@@ -1214,6 +1214,7 @@ export class ModalEditor extends CustomEditor {
     if ("insert" === this.mode) {
       this.clearUnderlyingPasteStateIfActive();
       this.setMode("normal");
+      if (this.getCursor().col > 0) this.moveCursorBy(-1);
     } else {
       super.handleInput("\x1b"); // pass escape to abort agent
     }
@@ -2017,7 +2018,7 @@ export class ModalEditor extends CustomEditor {
         this.setMode();
         break;
       case "x":
-        this.cutCharUnderCursor();
+        this.cutCharUnderCursor(true);
         break;
       case "j":
         this.moveCursorVertically(1);
@@ -2615,7 +2616,7 @@ export class ModalEditor extends CustomEditor {
     return col >= line.length;
   }
 
-  private cutCharUnderCursor(): void {
+  private cutCharUnderCursor(normal: boolean = false): void {
     const count = Math.max(1, Math.min(MAX_COUNT, this.takeTotalCount(1)));
     const cursor = this.getCursor();
     const line = this.getLines()[cursor.line] ?? "";
@@ -2630,6 +2631,10 @@ export class ModalEditor extends CustomEditor {
         text.slice(lineStartAbs + range.end),
       lineStartAbs + range.start,
     );
+    if (normal) {
+      const { line, col } = this.getCurrentLineAndCol();
+      if (line && col >= line.length) this.moveCursorBy(-1);
+    }
   }
 
   private cutToEndOfLine(): void {

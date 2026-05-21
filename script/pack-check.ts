@@ -67,7 +67,7 @@ const THRESHOLDS = {
   maxFiles: 12,
   // WORD/delimited text objects plus mode-color settings add package surface.
   // Keep budgets tight enough to catch accidental docs/tests in the package.
-  maxSize: 31400,
+  maxSize: 31450,
   maxUnpackedSize: 139500,
 } as const;
 
