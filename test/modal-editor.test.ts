@@ -11,9 +11,9 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { CURSOR_MARKER, visibleWidth } from "@mariozechner/pi-tui";
-import { setPiVimSettingsReaderForTests } from "../clipboard-policy.js";
 import installPiVim, { ModalEditor } from "../index.js";
 import type { WordMotionClass } from "../motions.js";
+import { setPiVimSettingsReaderForTests } from "../settings.js";
 import type {
   WordMotionDirection,
   WordMotionTarget,

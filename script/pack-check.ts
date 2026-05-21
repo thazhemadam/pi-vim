@@ -33,6 +33,7 @@ const REQUIRED_FILES = [
   "package.json",
   "index.ts",
   "motions.ts",
+  "settings.ts",
   "types.ts",
   "word-boundary-cache.ts",
 ] as const;
@@ -64,9 +65,9 @@ const FORBIDDEN_REGEX_BY_GLOB: Record<
 
 const THRESHOLDS = {
   maxFiles: 12,
-  // WORD/delimited text objects plus formatted source add packaged surface.
+  // WORD/delimited text objects plus the settings module add packaged surface.
   // Keep budgets tight enough to catch accidental docs/tests in the package.
-  maxSize: 31000,
+  maxSize: 31100,
   maxUnpackedSize: 139000,
 } as const;
 

@@ -11,9 +11,7 @@ import {
 import {
   type ClipboardMirrorPolicy,
   DEFAULT_CLIPBOARD_MIRROR_POLICY,
-  type ModeColorSettings,
   type RegisterWriteSource,
-  readPiVimSettings,
   resolveClipboardMirrorPolicy,
 } from "./clipboard-policy.js";
 import {
@@ -24,6 +22,7 @@ import {
   reverseCharMotion,
   type WordMotionClass,
 } from "./motions.js";
+import { type ModeColorSettings, readPiVimSettings } from "./settings.js";
 import {
   resolveDelimitedTextObjectRange,
   resolveWordTextObjectRange,
